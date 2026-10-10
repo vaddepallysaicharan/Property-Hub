@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import PropertyCard from './PropertyCard';
 import { Property } from '@/types/property';
-import { Building2, Sparkles, Filter, Search, RotateCcw } from 'lucide-react';
+import { Building2, Sparkles, Filter, Search, RotateCcw, Compass } from 'lucide-react';
 
 interface PropertyGridProps {
   initialProperties: Property[];
@@ -18,6 +18,18 @@ export default function PropertyGrid({
   const [listingType, setListingType] = useState<'All' | 'For Rent' | 'For Sale'>('All');
   const [propertyType, setPropertyType] = useState<'All' | 'Apartment' | 'House' | 'Villa'>('All');
   const [priceRange, setPriceRange] = useState<string>('All');
+
+  // Synchronize with search inputs from HeroSection
+  useEffect(() => {
+    const handleHeroSearch = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      if (typeof customEvent.detail === 'string') {
+        setSearchTerm(customEvent.detail);
+      }
+    };
+    window.addEventListener('propertyhub:search', handleHeroSearch);
+    return () => window.removeEventListener('propertyhub:search', handleHeroSearch);
+  }, []);
 
   const filteredProperties = useMemo(() => {
     return initialProperties.filter((property) => {
@@ -81,17 +93,26 @@ export default function PropertyGrid({
             Curated Listings
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
-            Hyderabad Properties
+            Discover Your Next Home
           </h2>
           <p className="mt-2 text-slate-600 max-w-xl text-sm sm:text-base">
-            Verified properties in Hitec City, Gachibowli, Banjara Hills & more. Filter by location, price, and type.
+            Explore properties that match your lifestyle and budget.
           </p>
         </div>
 
-        {/* Quick stats badge */}
-        <div className="text-xs text-slate-500 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/80 self-start md:self-end">
-          Showing <span className="font-bold text-slate-800">{filteredProperties.length}</span> of{' '}
-          <span className="font-bold text-slate-800">{initialProperties.length}</span> listings
+        {/* Quick stats badge & Map View link */}
+        <div className="flex flex-wrap items-center gap-2.5 self-start md:self-end">
+          <div className="text-xs text-slate-500 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/80">
+            Showing <span className="font-bold text-slate-800">{filteredProperties.length}</span> of{' '}
+            <span className="font-bold text-slate-800">{initialProperties.length}</span> listings
+          </div>
+          <Link
+            href="/explore"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white text-xs font-semibold rounded-xl border border-blue-200/80 transition-all shadow-xs"
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span>Map View</span>
+          </Link>
         </div>
       </div>
 
@@ -117,7 +138,7 @@ export default function PropertyGrid({
                 key={type}
                 type="button"
                 onClick={() => setListingType(type)}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                className={`flex-1 py-1.5 px-1 text-[11px] sm:text-xs font-semibold rounded-lg transition-all text-center truncate ${
                   listingType === type
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -202,31 +223,6 @@ export default function PropertyGrid({
           </button>
         </div>
       )}
-
-      {/* Bottom CTA for Owners */}
-      <div className="mt-16 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-8 sm:p-12 text-white relative overflow-hidden shadow-xl">
-        <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="max-w-2xl relative z-10">
-          <span className="inline-block px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-medium mb-4">
-            For Property Owners
-          </span>
-          <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3">
-            Have a property in Hyderabad to rent or sell?
-          </h3>
-          <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-6">
-            List your apartment, villa, or independent house with photos in under 3 minutes. Reach thousands of verified seekers directly without paying broker commissions.
-          </p>
-          <div className="flex flex-wrap items-center gap-4">
-            <Link
-              href="/owner/properties/new"
-              className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-all shadow-md active:scale-95 inline-flex items-center justify-center"
-            >
-              List Your Property Now
-            </Link>
-            <span className="text-xs text-slate-400">Zero upfront fees for property owners</span>
-          </div>
-        </div>
-      </div>
     </section>
   );
 }

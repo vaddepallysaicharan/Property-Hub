@@ -3,11 +3,13 @@ import { Video, Film, Sparkles } from 'lucide-react';
 interface PropertyVideoPlayerProps {
   videoUrl?: string | null;
   propertyTitle: string;
+  posterImage?: string;
 }
 
 export default function PropertyVideoPlayer({
   videoUrl,
   propertyTitle,
+  posterImage,
 }: PropertyVideoPlayerProps) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
@@ -18,7 +20,7 @@ export default function PropertyVideoPlayer({
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900">Property Showcase</h3>
-            <p className="text-xs text-slate-500">Cinematic walkthrough tour for {propertyTitle}</p>
+            <p className="text-xs text-slate-500">Watch the cinematic showcase of this property.</p>
           </div>
         </div>
         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
@@ -31,6 +33,9 @@ export default function PropertyVideoPlayer({
           <video
             src={videoUrl}
             controls
+            playsInline
+            poster={posterImage}
+            aria-label={`Cinematic showcase video for ${propertyTitle}`}
             className="w-full h-full object-cover"
             preload="metadata"
           >

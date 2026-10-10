@@ -1,13 +1,24 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { MapPin, Bed, Bath, Maximize2, CheckCircle2, Send, Heart, Play } from 'lucide-react';
 import { Property } from '@/types/property';
 
 interface PropertyCardProps {
   property: Property;
+  isSelected?: boolean;
+  onSelect?: (property: Property) => void;
+  compact?: boolean;
 }
 
-export default function PropertyCard({ property }: PropertyCardProps) {
+export default function PropertyCard({
+  property,
+  isSelected = false,
+  onSelect,
+  compact = false,
+}: PropertyCardProps) {
+  const router = useRouter();
+
   const formatIndianPrice = (price: number, listingType: string) => {
     if (listingType === 'For Sale') {
       if (price >= 10000000) {
@@ -26,12 +37,38 @@ export default function PropertyCard({ property }: PropertyCardProps) {
 
   const formattedPrice = formatIndianPrice(property.price, property.listingType);
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // If clicking inside a link or button, let that action proceed
+    const target = e.target as HTMLElement;
+    if (target.closest('a') || target.closest('button')) {
+      return;
+    }
+    if (onSelect) {
+      onSelect(property);
+    } else {
+      router.push(`/properties/${property.id}`);
+    }
+  };
+
   return (
-    <article className="group bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col">
-      {/* Property Image Container (Clickable Link) */}
-      <Link
-        href={`/properties/${property.id}`}
-        className="block relative aspect-[16/10] w-full overflow-hidden bg-slate-100 cursor-pointer"
+    <article
+      onClick={handleCardClick}
+      className={`group bg-white rounded-2xl border overflow-hidden transition-all duration-300 flex flex-col cursor-pointer ${
+        isSelected
+          ? 'border-blue-600 ring-2 ring-blue-500/30 shadow-lg -translate-y-0.5 bg-blue-50/10'
+          : 'border-slate-200/80 shadow-xs hover:shadow-lg hover:-translate-y-1'
+      } ${compact ? 'text-xs' : ''}`}
+    >
+      {/* Property Image Container */}
+      <div
+        onClick={() => {
+          if (onSelect) {
+            onSelect(property);
+          } else {
+            router.push(`/properties/${property.id}`);
+          }
+        }}
+        className="block relative aspect-[16/10] w-full overflow-hidden bg-slate-100"
       >
         <Image
           src={property.imageUrl}
@@ -84,7 +121,7 @@ export default function PropertyCard({ property }: PropertyCardProps) {
             {property.propertyType}
           </span>
         </div>
-      </Link>
+      </div>
 
       {/* Card Content */}
       <div className="p-5 flex-1 flex flex-col justify-between">
@@ -115,18 +152,18 @@ export default function PropertyCard({ property }: PropertyCardProps) {
           </div>
 
           {/* Specs / Meta */}
-          <div className="grid grid-cols-3 gap-2 py-3 px-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600 mb-4">
-            <div className="flex items-center gap-1.5 justify-center">
-              <Bed className="w-4 h-4 text-slate-400" />
-              <span>{property.bedrooms} BHK</span>
+          <div className="grid grid-cols-3 gap-1 sm:gap-2 py-2.5 sm:py-3 px-2 sm:px-3 bg-slate-50 rounded-xl border border-slate-100 text-[11px] sm:text-xs text-slate-600 mb-4">
+            <div className="flex items-center gap-1 sm:gap-1.5 justify-center min-w-0">
+              <Bed className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
+              <span className="truncate">{property.bedrooms} BHK</span>
             </div>
-            <div className="flex items-center gap-1.5 justify-center border-x border-slate-200/60">
-              <Bath className="w-4 h-4 text-slate-400" />
-              <span>{property.bathrooms} Bath</span>
+            <div className="flex items-center gap-1 sm:gap-1.5 justify-center border-x border-slate-200/60 px-1 min-w-0">
+              <Bath className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 shrink-0" />
+              <span className="truncate">{property.bathrooms} Bath</span>
             </div>
-            <div className="flex items-center gap-1.5 justify-center">
-              <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
-              <span>{property.sqft} sqft</span>
+            <div className="flex items-center gap-1 sm:gap-1.5 justify-center min-w-0">
+              <Maximize2 className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400 shrink-0" />
+              <span className="truncate">{property.sqft} sqft</span>
             </div>
           </div>
         </div>

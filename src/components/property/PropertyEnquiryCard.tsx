@@ -28,10 +28,12 @@ export default function PropertyEnquiryCard({
   );
 
   useEffect(() => {
-    const stored = getUserStoredDetails();
-    if (stored.name) setName(stored.name);
-    if (stored.email) setEmail(stored.email);
-    if (stored.phone) setPhone(stored.phone);
+    setTimeout(() => {
+      const stored = getUserStoredDetails();
+      if (stored.name) setName(stored.name);
+      if (stored.email) setEmail(stored.email);
+      if (stored.phone) setPhone(stored.phone);
+    }, 0);
   }, []);
 
   // Field validation errors

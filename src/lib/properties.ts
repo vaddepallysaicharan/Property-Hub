@@ -1,5 +1,6 @@
 import { getDb } from './db';
 import { Property, DbProperty, PropertyFilters, PropertyType, ListingType, Enquiry } from '@/types/property';
+import { getCoordinatesForLocation } from './coordinates';
 
 export function mapDbPropertyToProperty(row: Record<string, unknown>): Property {
   let photos: string[] = [];
@@ -23,6 +24,11 @@ export function mapDbPropertyToProperty(row: Record<string, unknown>): Property 
   const address = locationParts[0] || 'Hyderabad';
   const city = locationParts[1] || 'Hyderabad';
 
+  // Resolve coordinates: explicit lat/lng or verified Hyderabad neighborhood
+  const explicitLat = typeof row.latitude === 'number' ? row.latitude : null;
+  const explicitLng = typeof row.longitude === 'number' ? row.longitude : null;
+  const coords = getCoordinatesForLocation(locString, explicitLat, explicitLng);
+
   return {
     id: String(row.id),
     title: String(row.title),
@@ -43,6 +49,9 @@ export function mapDbPropertyToProperty(row: Record<string, unknown>): Property 
     imageUrl,
     photos: photos.length > 0 ? photos : [imageUrl],
     video_url: (row.video_url as string) || null,
+    latitude: coords?.latitude ?? null,
+    longitude: coords?.longitude ?? null,
+    isApproximateLocation: coords?.isApproximate ?? false,
     isFeatured:
       (row.listing_type === 'For Rent' && Number(row.price) >= 50000) ||
       (row.listing_type === 'For Sale' && Number(row.price) >= 30000000),
@@ -129,33 +138,64 @@ export async function createProperty(data: {
   area: number;
   photos: string[];
   video_url?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }): Promise<string> {
   const db = getDb();
   const id = data.id || `prop-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const photosJson = JSON.stringify(data.photos || []);
 
-  await db.execute({
-    sql: `
-      INSERT INTO properties (
-        id, title, description, price, location, property_type,
-        listing_type, bedrooms, bathrooms, area, photos, video_url
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    args: [
-      id,
-      data.title,
-      data.description || '',
-      data.price,
-      data.location,
-      data.property_type,
-      data.listing_type,
-      data.bedrooms,
-      data.bathrooms,
-      data.area,
-      photosJson,
-      data.video_url || null,
-    ],
-  });
+  try {
+    await db.execute({
+      sql: `
+        INSERT INTO properties (
+          id, title, description, price, location, property_type,
+          listing_type, bedrooms, bathrooms, area, photos, video_url,
+          latitude, longitude
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: [
+        id,
+        data.title,
+        data.description || '',
+        data.price,
+        data.location,
+        data.property_type,
+        data.listing_type,
+        data.bedrooms,
+        data.bathrooms,
+        data.area,
+        photosJson,
+        data.video_url || null,
+        data.latitude ?? null,
+        data.longitude ?? null,
+      ],
+    });
+  } catch {
+    // Backward compatibility fallback if latitude/longitude columns do not exist yet
+    await db.execute({
+      sql: `
+        INSERT INTO properties (
+          id, title, description, price, location, property_type,
+          listing_type, bedrooms, bathrooms, area, photos, video_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: [
+        id,
+        data.title,
+        data.description || '',
+        data.price,
+        data.location,
+        data.property_type,
+        data.listing_type,
+        data.bedrooms,
+        data.bathrooms,
+        data.area,
+        photosJson,
+        data.video_url || null,
+      ],
+    });
+  }
 
   return id;
 }
@@ -211,6 +251,14 @@ export async function updateProperty(
   if (data.video_url !== undefined) {
     updates.push('video_url = ?');
     args.push(data.video_url);
+  }
+  if (data.latitude !== undefined) {
+    updates.push('latitude = ?');
+    args.push(data.latitude);
+  }
+  if (data.longitude !== undefined) {
+    updates.push('longitude = ?');
+    args.push(data.longitude);
   }
 
   if (updates.length === 0) return true;

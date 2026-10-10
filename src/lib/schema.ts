@@ -31,11 +31,30 @@ CREATE TABLE IF NOT EXISTS enquiries (
 );
 `;
 
+export async function ensurePropertiesColumns(): Promise<void> {
+  try {
+    const db = getDb();
+    try {
+      await db.execute('ALTER TABLE properties ADD COLUMN latitude REAL;');
+    } catch {
+      // Column may already exist
+    }
+    try {
+      await db.execute('ALTER TABLE properties ADD COLUMN longitude REAL;');
+    } catch {
+      // Column may already exist
+    }
+  } catch (err) {
+    console.warn('Could not run column migration:', err);
+  }
+}
+
 export async function initDatabase(): Promise<{ success: boolean; message: string }> {
   try {
     const db = getDb();
     await db.execute(CREATE_PROPERTIES_TABLE);
     await db.execute(CREATE_ENQUIRIES_TABLE);
+    await ensurePropertiesColumns();
     return { success: true, message: 'Database tables initialized successfully.' };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown database error';

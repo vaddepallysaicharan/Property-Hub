@@ -257,6 +257,7 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
             <PropertyVideoPlayer
               videoUrl={property.video_url}
               propertyTitle={property.title}
+              posterImage={allPhotos[0] || property.imageUrl}
             />
           </div>
 

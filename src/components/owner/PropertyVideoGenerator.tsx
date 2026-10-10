@@ -18,6 +18,9 @@ import {
   ArrowLeft,
   ChevronRight,
   ExternalLink,
+  UploadCloud,
+  Loader2,
+  Eye,
 } from 'lucide-react';
 
 interface PropertyVideoGeneratorProps {
@@ -31,11 +34,20 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('');
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [generatedVideoBlob, setGeneratedVideoBlob] = useState<Blob | null>(null);
+  const [savedVideoUrl, setSavedVideoUrl] = useState<string | null>(property.video_url || null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Clean valid photos list
+  // Clean valid photos list with imageUrl fallback
   const validPhotos = useMemo(() => {
-    return Array.isArray(property.photos) ? property.photos.filter(Boolean) : [];
-  }, [property.photos]);
+    const list = Array.isArray(property.photos) ? property.photos.filter(Boolean) : [];
+    if (list.length === 0 && property.imageUrl) {
+      return [property.imageUrl];
+    }
+    return list;
+  }, [property.photos, property.imageUrl]);
 
   const detectSupportedMimeType = (): string => {
     if (typeof window !== 'undefined' && typeof MediaRecorder !== 'undefined') {
@@ -82,13 +94,30 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
   const formattedPrice = formatPrice(property.price, property.listingType);
   const formattedArea = new Intl.NumberFormat('en-IN').format(property.sqft);
 
-  // Preload an image safely with anonymous CORS
+  // Preload an image safely with anonymous CORS and fallback
   const loadImage = (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
+      if (typeof window === 'undefined') {
+        reject(new Error('Cannot load image in non-browser environment'));
+        return;
+      }
       const img = new window.Image();
-      img.crossOrigin = 'anonymous';
+      const isExternal = url.startsWith('http://') || url.startsWith('https://');
+      if (isExternal) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+      img.onerror = () => {
+        if (isExternal && img.crossOrigin) {
+          // Retry without crossOrigin if CORS was blocked
+          const fallbackImg = new window.Image();
+          fallbackImg.onload = () => resolve(fallbackImg);
+          fallbackImg.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+          fallbackImg.src = url;
+        } else {
+          reject(new Error(`Failed to load image: ${url}`));
+        }
+      };
       img.src = url;
     });
   };
@@ -109,7 +138,9 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
       URL.revokeObjectURL(generatedVideoUrl);
       setGeneratedVideoUrl(null);
     }
-
+    setGeneratedVideoBlob(null);
+    setSaveSuccess(null);
+    setSaveError(null);
     setError(null);
     setIsGenerating(true);
     setProgress(5);
@@ -406,6 +437,7 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
       const videoBlob = await recorderStopped;
 
       const videoUrl = URL.createObjectURL(videoBlob);
+      setGeneratedVideoBlob(videoBlob);
       setGeneratedVideoUrl(videoUrl);
       setProgress(100);
       setIsGenerating(false);
@@ -418,6 +450,41 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
       setProgress(0);
     }
   }, [validPhotos, property, generatedVideoUrl, formattedPrice, formattedArea]);
+
+  const handleSaveToProperty = async () => {
+    if (!generatedVideoBlob || isSaving) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+
+    try {
+      const formData = new FormData();
+      const mimeType = generatedVideoBlob.type || 'video/webm';
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      const filename = `showcase-${property.id}.${ext}`;
+      formData.append('video', generatedVideoBlob, filename);
+
+      const res = await fetch(`/api/properties/${property.id}/video`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to save showcase video to property.');
+      }
+
+      setSavedVideoUrl(data.video_url);
+      setSaveSuccess('Showcase video saved to property successfully! It is now live on your listing.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'An error occurred while saving the video.';
+      setSaveError(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -537,6 +604,36 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
         </div>
       )}
 
+      {/* Save Error Banner */}
+      {saveError && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-3 shadow-2xs animate-in fade-in">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Failed to Save Video to Property</p>
+            <p className="text-xs text-red-600 mt-0.5">{saveError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Save Success Banner */}
+      {saveSuccess && (
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start justify-between gap-3 shadow-2xs animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Video Saved to Property</p>
+              <p className="text-xs text-emerald-700 mt-0.5">{saveSuccess}</p>
+            </div>
+          </div>
+          <Link
+            href={`/properties/${property.id}`}
+            className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline shrink-0 mt-0.5"
+          >
+            View on Property Page &rarr;
+          </Link>
+        </div>
+      )}
+
       {/* Generation & Preview Card */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -585,12 +682,12 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
           </div>
         )}
 
-        {/* Video Player Preview when Ready */}
+        {/* Newly Generated Video Player Preview when Ready */}
         {generatedVideoUrl && !isGenerating && (
           <div className="space-y-5 animate-in fade-in">
             <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 w-fit text-xs font-semibold">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Your showcase video is ready!</span>
+              <span>Showcase video generation completed!</span>
             </div>
 
             <div className="relative aspect-[16/9] w-full max-w-3xl mx-auto rounded-2xl overflow-hidden bg-black shadow-lg border border-slate-800">
@@ -603,12 +700,36 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
               />
             </div>
 
-            {/* Actions: Download & Regenerate */}
+            {/* Actions: Save to Property, Download & Regenerate */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isSaving || isGenerating}
+                onClick={handleSaveToProperty}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving to Property...</span>
+                  </>
+                ) : saveSuccess ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                    <span>Saved to Property</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="w-4 h-4" />
+                    <span>Save to Property</span>
+                  </>
+                )}
+              </button>
+
               <a
                 href={generatedVideoUrl}
                 download={`property-showcase-${property.id}.webm`}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition-all active:scale-95"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition-all active:scale-95"
               >
                 <Download className="w-4 h-4" />
                 <span>Download Video</span>
@@ -616,8 +737,9 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
 
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={generateVideo}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all active:scale-95 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Regenerate Video</span>
@@ -626,8 +748,61 @@ export default function PropertyVideoGenerator({ property }: PropertyVideoGenera
           </div>
         )}
 
-        {/* Initial Trigger Button (when not generated or during regeneration) */}
-        {!generatedVideoUrl && !isGenerating && (
+        {/* Existing Saved Video Preview (when not currently generating a new one) */}
+        {!generatedVideoUrl && !isGenerating && savedVideoUrl && (
+          <div className="space-y-5 animate-in fade-in">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-indigo-50/70 border border-indigo-200/80 p-3.5 rounded-xl">
+              <div className="flex items-center gap-2 text-indigo-800 text-xs font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>Saved Showcase Video is Active on this Property</span>
+              </div>
+              <span className="text-[11px] text-indigo-600 font-medium">
+                Saved & Live on Public Listing
+              </span>
+            </div>
+
+            <div className="relative aspect-[16/9] w-full max-w-3xl mx-auto rounded-2xl overflow-hidden bg-black shadow-lg border border-slate-800">
+              <video
+                src={savedVideoUrl}
+                controls
+                playsInline
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            {/* Actions for Saved Video */}
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={generateVideo}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Regenerate Video</span>
+              </button>
+
+              <a
+                href={savedVideoUrl}
+                download={`property-showcase-${property.id}.webm`}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all active:scale-95"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download Video</span>
+              </a>
+
+              <Link
+                href={`/properties/${property.id}`}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-all active:scale-95"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View on Listing</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Initial Trigger Button (when no video generated and none currently saved) */}
+        {!generatedVideoUrl && !isGenerating && !savedVideoUrl && (
           <div className="text-center py-6">
             <button
               type="button"

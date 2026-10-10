@@ -49,9 +49,6 @@ export default function OwnerDashboardClient({
   const [sentEnquiryIds, setSentEnquiryIds] = useState<string[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
-  // Portal view tabs: 'all' overview, 'properties', or 'enquiries'
-  const [activeMainTab, setActiveMainTab] = useState<'all' | 'properties' | 'enquiries'>('all');
-
   // Enquiries sub-tabs: EXACTLY 'sent' ("Enquiries") and 'inbox' ("Enquiry Inbox")
   const [enquirySubTab, setEnquirySubTab] = useState<'sent' | 'inbox'>('sent');
 
@@ -61,16 +58,13 @@ export default function OwnerDashboardClient({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Read client-stored sent enquiry IDs and email
-    const storedIds = getSentEnquiryIds();
-    const storedEmail = getUserEmail();
-    setSentEnquiryIds(storedIds);
-    setCurrentUserEmail(storedEmail);
-
-    // If URL hash contains #enquiries, activate the Enquiries tab
-    if (typeof window !== 'undefined' && window.location.hash === '#enquiries') {
-      setActiveMainTab('enquiries');
-    }
+    // Read client-stored sent enquiry IDs and email asynchronously
+    setTimeout(() => {
+      const storedIds = getSentEnquiryIds();
+      const storedEmail = getUserEmail();
+      setSentEnquiryIds(storedIds);
+      setCurrentUserEmail(storedEmail);
+    }, 0);
 
     // Refresh enquiries if initialEnquiries was empty
     if (!initialEnquiries || initialEnquiries.length === 0) {
@@ -432,6 +426,12 @@ export default function OwnerDashboardClient({
                       <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700">
                         {prop.propertyType}
                       </span>
+                      {prop.video_url && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs">
+                          <Video className="w-3 h-3 text-indigo-600" />
+                          <span>Showcase Active</span>
+                        </span>
+                      )}
                       <span className="text-base sm:text-lg font-bold text-slate-900 ml-auto sm:ml-0">
                         {formatPrice(prop.price, prop.listingType)}
                         {prop.pricePeriod === 'month' && (
@@ -490,13 +490,20 @@ export default function OwnerDashboardClient({
                     <span>Edit</span>
                   </Link>
 
-                  {/* Create Video Button */}
+                  {/* Create / Manage Showcase Video Button */}
                   <Link
                     href={`/owner/properties/${prop.id}/video`}
-                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 text-xs font-semibold rounded-xl border border-indigo-200/80 transition-colors"
+                    className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-colors ${
+                      prop.video_url
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-800 border-indigo-200/80'
+                    }`}
+                    title={prop.video_url ? 'Manage or replace showcase video' : 'Create showcase video'}
                   >
-                    <Video className="w-3.5 h-3.5 text-indigo-600" />
-                    <span className="whitespace-nowrap">Create Showcase</span>
+                    <Video className={`w-3.5 h-3.5 ${prop.video_url ? 'text-white' : 'text-indigo-600'}`} />
+                    <span className="whitespace-nowrap">
+                      {prop.video_url ? 'Manage Showcase' : 'Create Showcase'}
+                    </span>
                   </Link>
 
                   {/* Delete Button */}
@@ -607,9 +614,9 @@ export default function OwnerDashboardClient({
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1 min-w-0">
                       {/* Property Image Thumbnail */}
                       <div className="relative aspect-[16/10] sm:aspect-square w-full sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-slate-100 shrink-0">
-                        {enquiry.property_photo ? (
+                        {enquiry.property_image ? (
                           <Image
-                            src={enquiry.property_photo}
+                            src={enquiry.property_image}
                             alt={enquiry.property_title || 'Property'}
                             fill
                             className="object-cover"
@@ -747,10 +754,10 @@ export default function OwnerDashboardClient({
                           {/* Property Reference with Mini Thumbnail */}
                           <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
                             <span className="text-slate-400 font-medium">Interested in:</span>
-                            {enquiry.property_photo && (
+                            {enquiry.property_image && (
                               <div className="relative w-5 h-5 rounded-md overflow-hidden bg-slate-100 shrink-0">
                                 <Image
-                                  src={enquiry.property_photo}
+                                  src={enquiry.property_image}
                                   alt=""
                                   fill
                                   className="object-cover"

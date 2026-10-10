@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import path from 'path';
+import fs from 'fs/promises';
 import { getPropertyById, updateProperty, deleteProperty } from '@/lib/properties';
 
 interface RouteContext {
@@ -190,6 +192,38 @@ export async function DELETE(
         { success: false, error: 'Failed to delete property from database.' },
         { status: 500 }
       );
+    }
+
+    // 3. Clean up stored video file if located under /uploads/videos/
+    if (existing.video_url && existing.video_url.startsWith('/uploads/videos/')) {
+      const filename = path.basename(existing.video_url);
+      const videosDir = path.resolve(process.cwd(), 'public', 'uploads', 'videos');
+      const targetFilePath = path.resolve(videosDir, filename);
+      if (targetFilePath.startsWith(videosDir)) {
+        try {
+          await fs.unlink(targetFilePath);
+        } catch (unlinkErr) {
+          console.warn('[Property Delete - Video Unlink]:', unlinkErr);
+        }
+      }
+    }
+
+    // 4. Clean up stored photo files if located under /uploads/properties/
+    if (Array.isArray(existing.photos)) {
+      const photosDir = path.resolve(process.cwd(), 'public', 'uploads', 'properties');
+      for (const photo of existing.photos) {
+        if (typeof photo === 'string' && photo.startsWith('/uploads/properties/')) {
+          const photoName = path.basename(photo);
+          const photoPath = path.resolve(photosDir, photoName);
+          if (photoPath.startsWith(photosDir)) {
+            try {
+              await fs.unlink(photoPath);
+            } catch (unlinkErr) {
+              console.warn('[Property Delete - Photo Unlink]:', unlinkErr);
+            }
+          }
+        }
+      }
     }
 
     return NextResponse.json({

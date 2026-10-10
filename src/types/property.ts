@@ -26,6 +26,9 @@ export interface Property {
   imageUrl: string;
   photos?: string[];
   video_url?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isApproximateLocation?: boolean;
   isFeatured?: boolean;
   owner: PropertyOwner;
   tags?: string[];
@@ -44,6 +47,8 @@ export interface DbProperty {
   area: number;
   photos: string;
   video_url: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at: string;
 }
 
